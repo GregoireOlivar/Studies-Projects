@@ -33,3 +33,9 @@ The DevOps team is tasked to:
 | **6. Observability**                  | Prometheus + Grafana dashboards                                            | - Metrics visible for both cluster and application<br>- Dashboards show CPU, memory, and pod status<br>- Optional: basic alert triggers configured                                    |
 | **7. Documentation & Git Repository** | README, architecture diagrams, pipeline docs                               | - All steps clearly documented<br>- Architecture diagrams included<br>- CI/CD and GitOps process explained<br>- Repository is structured according to best practices                  |
 
+
+what needs to be install:
+- terraform 
+- k3d 
+- kubectl
+-  
