@@ -38,4 +38,4 @@ what needs to be install:
 - terraform 
 - k3d 
 - kubectl
--  
+- docker
