@@ -1,0 +1,83 @@
+version: '3.9'
+
+services:
+  ftp:
+    build: ./ftp
+    ports:
+      - "21:21"
+    volumes:
+      - ./ftp/vsftpd.conf:/etc/vsftpd.conf
+      - ./data/ftp:/srv/ftp
+
+  smb:
+    image: dperson/samba
+    ports:
+      - "445:445"
+    volumes:
+      - ./data/smb:/mount
+      - ./smb/smb.conf:/etc/samba/smb.conf
+
+  nfs:
+    image: itsthenetwork/nfs-server-alpine
+    privileged: true
+    volumes:
+      - ./data/nfs:/nfsshare
+      - ./nfs/exports:/etc/exports
+
+  dns:
+    image: internetsystemsconsortium/bind9
+    ports:
+      - "53:53/udp"
+    volumes:
+      - ./dns/named.conf:/etc/bind/named.conf
+
+  mail:
+    image: mailserver/docker-mailserver
+    hostname: mail
+    domainname: lab.local
+    ports:
+      - "25:25"
+      - "143:143"
+      - "110:110"
+    volumes:
+      - ./mail/postfix-main.cf:/etc/postfix/main.cf
+      - ./mail/dovecot.conf:/etc/dovecot/dovecot.conf
+
+  snmp:
+    image: polinux/snmpd
+    ports:
+      - "161:161/udp"
+    volumes:
+      - ./snmp/snmpd.conf:/etc/snmp/snmpd.conf
+
+  mysql:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql/my.cnf:/etc/mysql/my.cnf
+      - ./data/mysql:/var/lib/mysql
+
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "Password123!"
+    ports:
+      - "1433:1433"
+
+  oracle:
+    image: gvenzl/oracle-xe
+    ports:
+      - "1521:1521"
+    volumes:
+      - ./oracle/listener.ora:/opt/oracle/product/21c/dbhomeXE/network/admin/listener.ora
+
+  ipmi:
+    image: vapor-ware/ipmi-sim
+    ports:
+      - "623:623/udp"
+    volumes:
+      - ./ipmi/ipmi-sim.conf:/etc/ipmi/ipmi-sim.conf

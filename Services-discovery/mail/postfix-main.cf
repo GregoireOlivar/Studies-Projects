@@ -1,0 +1,7 @@
+myhostname = mail.lab.local
+mydomain = lab.local
+myorigin = $mydomain
+inet_interfaces = all
+mydestination = $myhostname, localhost.$mydomain, localhost
+relayhost =
+home_mailbox = Maildir/
