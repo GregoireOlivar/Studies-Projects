@@ -1,12 +1,23 @@
-resource "kubernetes_namespace" "test1" {
+resource "kubernetes_namespace" "argocd" {
   metadata {
-    name = "test"
+    name = "argocd"
   }
 }
 
-
-resource "kubernetes_namespace" "test2" {
+resource "kubernetes_namespace" "apps" {
   metadata {
-    name = "test2"
+    name = "apps"
+  }
+}
+
+resource "kubernetes_namespace" "monitoring" {
+  metadata {
+    name = "monitoring"
+  }
+}
+
+resource "kubernetes_namespace" "security" {
+  metadata {
+    name = "security"
   }
 }

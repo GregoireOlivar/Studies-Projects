@@ -32,7 +32,7 @@ services:
       - ./dns/named.conf:/etc/bind/named.conf
 
   mail:
-    image: mailserver/docker-mailserver
+    image: mailserver/docker-mailserver:latest
     hostname: mail
     domainname: lab.local
     ports:
@@ -40,8 +40,15 @@ services:
       - "143:143"
       - "110:110"
     volumes:
-      - ./mail/postfix-main.cf:/etc/postfix/main.cf
-      - ./mail/dovecot.conf:/etc/dovecot/dovecot.conf
+      - ./mail/config:/tmp/docker-mailserver
+      - ./mail/data:/var/mail
+      - ./mail/state:/var/mail-state
+      - ./mail/logs:/var/log/mail
+    environment:
+      ENABLE_IMAP: 1
+      ENABLE_POP3: 1
+      ENABLE_SIEVE: 0
+      SPOOF_PROTECTION: 0
 
   snmp:
     image: polinux/snmpd
