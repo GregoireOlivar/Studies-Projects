@@ -1,0 +1,2 @@
+NFS sample file
+This file is present in the NFS share for read/write checks.

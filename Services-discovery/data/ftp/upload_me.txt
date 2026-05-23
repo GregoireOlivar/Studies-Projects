@@ -1,0 +1,2 @@
+This file is intended to be uploaded to the FTP server as a quick test.
+Filename: upload_me.txt

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Exports file for the NFS server container in this repo.
+# This exports the in-container path /nfsshare (backed by ./data/nfs)
+# with read/write access to all clients (lab use).
+
+/nfsshare *(rw,sync,no_subtree_check,no_root_squash,insecure)

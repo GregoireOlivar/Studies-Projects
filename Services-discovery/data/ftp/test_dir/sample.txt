@@ -1,0 +1,2 @@
+Sample file inside test_dir
+Use this to test cd and ls in subdirectories.

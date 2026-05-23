@@ -1,0 +1,2 @@
+Hello from FTP share
+This file is here so you can test download (get) operations.

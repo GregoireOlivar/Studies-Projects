@@ -4,7 +4,10 @@ services:
   ftp:
     build: ./ftp
     ports:
+      - "20:20"
       - "21:21"
+      # Plage PASV utilisée par vsftpd (doit correspondre à pasv_min_port/pasv_max_port)
+      - "30000-30010:30000-30010"
     volumes:
       - ./ftp/vsftpd.conf:/etc/vsftpd.conf
       - ./data/ftp:/srv/ftp
@@ -19,10 +22,15 @@ services:
 
   nfs:
     image: itsthenetwork/nfs-server-alpine
+    # The upstream image is amd64-only. On Apple Silicon we can request amd64
+    # to run under QEMU emulation. If you prefer native performance and there
+    # is an arm64 build, change or remove this line.
+    platform: linux/amd64
     privileged: true
     volumes:
       - ./data/nfs:/nfsshare
-      - ./nfs/exports:/etc/exports
+      # mount the exports file (must be a file, not a directory)
+      - ./nfs/exports/exports:/etc/exports:ro
 
   dns:
     image: internetsystemsconsortium/bind9
