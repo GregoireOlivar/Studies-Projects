@@ -1,5 +1,10 @@
 # OpenID Connect (OIDC) Authorization Code Flow with PKCE
 
+
+
+![OIDC Flow](./auth-flow.svg)
+
+
 ## 1. User Initiates Login
 
 The user clicks the `/login` button on the client application's web page and it's gonna trigger the OIDC flow.
@@ -119,7 +124,7 @@ The client application receives the tokens and must validate the ID Token before
 After beeing validated, the client extracts the user identifiers like the `sub` (Subject) and requested scopes (e.g., `email`). from the ID token. Based on the `sub`, the application will either identify and log in an existing user account in its own database or either create a new user account (JIT provisioning).
 
 ---
-
+![OIDC Flow](./auth-flow.svg)
 # Establish Application Session
 
 Now that the user is fully authenticated, the client application issues its own local application session. It typically sets a secure, encrypted session cookie in the user browser.
