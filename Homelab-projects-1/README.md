@@ -1,8 +1,6 @@
 # Homelab Project 1 — Reverse Proxy + 2 Node apps + Postgres
 
-This was my first proper Docker Compose project and has been done when I was at ENSEEIHT. The goal was to learn how several containers talk to each other and to do a bit of container networking: a reverse proxy in front, two small Node.js apps behind it, and a Postgres database that the apps can query.
-Nothing fancy, but I wanted to understand the *networking* and the *routing*
-properly instead of just copy-pasting a tutorial.
+This was my first proper Docker Compose project and has been done when I was at ENSEEIHT, and continued after school. The goal was to learn how several containers talk to each other and to do a bit of container networking: a reverse proxy in front, two small Node.js apps behind it, and a Postgres database that the apps can query.
 
 ## What's inside
 
@@ -111,6 +109,7 @@ literally what `ports: "80:80"` does under the hood.
 ![Container Networking with two containers](./container_basic_networking.svg)
 
 For my project, I am going to need several network to have an isolation between the reverse proxy, the backend, and the db.
+172.18.x is the tutorial's example, my actual subnets are 192.168.x below.
 
 A "Docker network" = a bridge + a subnet + the iptables rules around it. I used IPAM that is a Docker subsystem distributing and following the IP address for the network. It defines what subnet is used, what is the network gateway and what IP we should give to each veth in each container joining a specific network.
 
@@ -138,6 +137,10 @@ networks:
 
 Each network is a separate bridge, so I end up with **3 bridges** and they can only talk to each other if they are in the same network.
 
+This is the scheme of the networking (simplified to only one app) we would have :
+
+![Networking of the project](./multinetworking.svg)
+
 My intended zones are:
 
 - **`frontend`** — the only network *without* `internal: true`, so it's the only one with outside access (paired with `ports: "80:80"`). Only nginx lives here.
@@ -148,10 +151,9 @@ My intended zones are:
 - **`dbs`** (`internal: true`) — meant to be the database-only zone, so that
   **only the apps** can reach Postgres and the proxy cannot talk to it directly.
 
-The flow I'm aiming for is a clean chain: `internet → nginx → apps → db`, where
-each layer only sees its direct neighbour.
 
 
+The flow I'm aiming for is a clean chain: `internet → nginx → apps → db`, where each layer only sees its direct neighbour.
 
 ## How to run it
 
@@ -171,9 +173,145 @@ docker compose logs -f app1
 docker compose ps
 ```
 
-If I change `init.sql`, I have to recreate the volume so it runs again:
+To delete it and start it again (the `-v` drops the volume so `init.sql` runs again):
 
 ```bash
-docker compose down -v         # the -v drops the volume
-docker compose up --build -d
+docker compose down -v
 ```
+
+> ⚠️ After changing the networks in `docker-compose.yml`, you must `docker compose down`
+> then `up` again: editing the file does not re-wire an already running container.
+
+## Exploring the running stack
+
+Once it's up, I explored the architecture to confirm it behaves as designed.
+Note: the container IPs are assigned dynamically by IPAM, so they can change
+between two `up`s (the captures below were taken across a couple of runs, which
+is why the proxy's backend IP isn't identical everywhere).
+
+### 1. Functional checks (the routing works)
+
+```console
+$ curl localhost:80
+Hello from Nginx!
+
+$ curl localhost/app1/
+Hello from Node server 1
+
+$ curl localhost/app2/
+Hello from Node server 2
+
+$ curl localhost/app1/db
+{"databases":["analytics","billing","inventory","my_database","postgres","staging"]}
+
+$ curl localhost/app1/health
+{"status":"ok"}
+```
+
+### 2. The three bridges exist on the host
+
+I first checked that my three networks gave me three bridges on the host:
+
+```console
+$ ip a
+# (trimmed to the relevant interfaces)
+4: eth0: ... inet 172.16.0.2/24 ... eth0          # host's real NIC
+5: docker0: ... inet 172.17.0.1/16 ... docker0    # default docker bridge (unused here)
+10: br-b86094a1ec54: ... inet 192.168.3.1/24      # dbs
+11: br-c8e68250d227: ... inet 192.168.1.1/24      # frontend
+12: br-db8333fba18e: ... inet 192.168.2.1/24      # backend
+13: veth701c0b2@if2: ... master br-b86094a1ec54   # a container's host-side veth, attached to dbs
+14: veth4385e0b@if2: ... master br-db8333fba18e   # ... attached to backend
+# ... more veth pairs, each with "master br-xxxx"
+```
+
+Two things confirmed:
+- the host-side **veths have no IP** and have their **bridge as `master`** (exactly the bridge model from the iximiuz lab);
+- each bridge owns the gateway IP `192.168.x.1` (`x` = 1/2/3 depending on the subnet).
+
+### 3. The proxy has two interfaces (frontend + backend)
+
+```console
+$ docker exec -it homelab-projects-1-proxy-1 /bin/sh
+/ # ifconfig
+eth0      inet addr:192.168.2.4  Bcast:192.168.2.255  Mask:255.255.255.0   # backend
+eth1      inet addr:192.168.1.2  Bcast:192.168.1.255  Mask:255.255.255.0   # frontend
+lo        inet addr:127.0.0.1    Mask:255.0.0.0
+
+/ # ip route
+default via 192.168.1.1 dev eth1
+192.168.1.0/24 dev eth1 scope link  src 192.168.1.2     # frontend
+192.168.2.0/24 dev eth0 scope link  src 192.168.2.4     # backend
+```
+
+`eth0` = backend, `eth1` = frontend, and the routes are pre-configured. The
+default route goes out the frontend bridge (the only non-internal one).
+
+### 4. The proxy CANNOT reach the database (isolation works)
+
+The DB lives on the `dbs` network only (IP `192.168.3.4`), and the proxy is not
+on `dbs`, so it should not be able to reach it:
+
+```console
+/ # ping 192.168.3.4
+PING 192.168.3.4 (192.168.3.4): 56 data bytes
+^C
+--- 192.168.3.4 ping statistics ---
+3 packets transmitted, 0 packets received, 100% packet loss
+```
+
+The packet is routed to the host (default gateway), but the host **drops it in
+the `FORWARD` chain**: Docker's inter-network isolation + the `internal: true`
+rules forbid forwarding from one bridge into the `dbs` bridge.
+
+### 5. ...but the proxy CAN reach the internet (frontend is not internal)
+
+```console
+/ # ping 8.8.8.8
+64 bytes from 8.8.8.8: seq=0 ttl=116 time=5.583 ms
+64 bytes from 8.8.8.8: seq=1 ttl=116 time=5.536 ms
+--- 8.8.8.8 ping statistics ---
+2 packets transmitted, 2 packets received, 0% packet loss
+```
+
+### 6. app1 is on backend + dbs, and is cut off from the internet
+
+```console
+$ docker exec -it homelab-projects-1-app1-1 /bin/sh
+/app1 # ifconfig
+eth0      inet addr:192.168.2.2  Mask:255.255.255.0   # backend
+eth1      inet addr:192.168.3.3  Mask:255.255.255.0   # dbs
+lo        inet addr:127.0.0.1    Mask:255.0.0.0
+
+/app1 # ip route
+192.168.2.0/24 dev eth0 scope link  src 192.168.2.2    # backend
+192.168.3.0/24 dev eth1 scope link  src 192.168.3.3    # dbs
+# note: no default route -> no way out to the internet
+
+/app1 # ping 8.8.8.8
+PING 8.8.8.8 (8.8.8.8): 56 data bytes
+ping: sendto: Network unreachable
+```
+
+app1 sits on `backend` (to receive proxy traffic) and `dbs` (to reach Postgres),
+has **no default route**, so it can't reach the internet — exactly the
+confinement I wanted for back-of-house services.
+
+## Conclusion
+
+This project started as "make a few containers talk" and turned into a proper
+dive into how Docker networking actually works under the hood. The end result is
+a small but cleanly segmented stack:
+
+- a single public entry point (nginx), everything else hidden behind it;
+- a three-zone network design (`frontend` / `backend` / `dbs`) where isolation
+  comes from **not sharing a bridge** rather than from a firewall;
+- `internal: true` to cut the apps and the DB off from the internet;
+- and I verified each property hands-on (routing, isolation, NAT) instead of
+  trusting that it "should" work.
+
+The biggest takeaways: containers get isolation from **network namespaces**,
+connectivity from **veth pairs + a bridge**, internet access from **NAT**, and
+the difference between *routing* (is there a route?) and *filtering* (is the
+`FORWARD` chain allowing it?) is what actually enforces the segmentation.
+
